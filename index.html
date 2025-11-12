@@ -256,35 +256,39 @@
             return sessionId;
         };
 
-        const saveAuditData = async (sessionId, auditState, allQuestions) => {
-            const dataToSave = { ...auditState, allQuestions };
-            const localDataString = JSON.stringify(dataToSave);
+        const saveAuditData = async (sessionId, auditState, allQuestions, isFinal = false) => {
+    const dataToSave = { ...auditState, allQuestions };
+    const localDataString = JSON.stringify(dataToSave);
 
-            if (!isGoogleSheetConfigured()) {
-                console.warn('Google Sheet URL not configured. Saving to localStorage.');
-                localStorage.setItem(`audit-data-${sessionId}`, localDataString);
-                return;
-            }
+    // Always autosave to localStorage for draft progress
+    localStorage.setItem(`audit-data-${sessionId}`, localDataString);
 
-            const payload = {
-                action: 'save',
-                sessionId: sessionId,
-                data: localDataString
-            };
+    // Only send to Google Sheets when it's a final submission
+    if (!isFinal) return;
 
-            try {
-                const response = await fetch(GOOGLE_SHEET_URL, {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                });
-                 if (!response.ok) {
-                   throw new Error(`Network response was not ok, status: ${response.status}`);
-                }
-            } catch (error) {
-                console.error('Error saving data to Google Sheet, saving to localStorage instead:', error);
-                localStorage.setItem(`audit-data-${sessionId}`, localDataString);
-            }
-        };
+    if (!isGoogleSheetConfigured()) {
+        alert("Google Sheet URL not configured. Data saved locally only.");
+        return;
+    }
+
+    const payload = {
+        action: 'save',
+        sessionId,
+        data: localDataString
+    };
+
+    try {
+        const response = await fetch(GOOGLE_SHEET_URL, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) throw new Error(`Network error ${response.status}`);
+        console.log('Final audit data saved to Google Sheets');
+    } catch (err) {
+        console.error('Error submitting to Google Sheets:', err);
+    }
+};
+
 
 const loadAuditData = async (sessionId) => {
     if (!isGoogleSheetConfigured()) {
@@ -415,15 +419,17 @@ const loadAuditData = async (sessionId) => {
             }, [sessionId, sections]); 
 
             useEffect(() => {
-                if (!isLoaded || auditState.isSubmitted) return;
-                if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-                setIsSaving(true);
-                saveTimeoutRef.current = window.setTimeout(async () => {
-                    await saveAuditData(sessionId, auditState, ALL_QUESTIONS);
-                    setIsSaving(false);
-                }, 1500);
-                return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
-            }, [auditState, sessionId, isLoaded, ALL_QUESTIONS]);
+    if (!isLoaded || auditState.isSubmitted) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    setIsSaving(true);
+    saveTimeoutRef.current = window.setTimeout(() => {
+        // Save only to localStorage (not Google Sheet)
+        localStorage.setItem(`audit-data-${sessionId}`, JSON.stringify({ ...auditState, allQuestions: ALL_QUESTIONS }));
+        setIsSaving(false);
+    }, 1500);
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+}, [auditState, sessionId, isLoaded, ALL_QUESTIONS]);
+
 
             const handleResponseChange = useCallback((questionId, response) => {
                 setAuditState(prev => {
@@ -445,10 +451,12 @@ const loadAuditData = async (sessionId) => {
             }, []);
 
             const handleSubmit = useCallback(async () => {
-                const finalState = { ...auditState, isSubmitted: true };
-                setAuditState(finalState);
-                await forceSave(finalState);
-            }, [auditState, forceSave]);
+    const finalState = { ...auditState, isSubmitted: true };
+    setAuditState(finalState);
+    // Only now send to Google Sheets
+    await saveAuditData(sessionId, finalState, ALL_QUESTIONS, true);
+}, [auditState, sessionId, ALL_QUESTIONS]);
+
 
             const resetChecklist = useCallback(async () => {
                 await clearAuditData(sessionId);
