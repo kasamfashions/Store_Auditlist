@@ -100,33 +100,43 @@
         // --- START: Google Sheets Configuration ---
         // IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
         const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbz4JK4ucG_gTL5t5b7zr4R37gIFyZ2C3O52kNxuKcHhO3_qupt0C6vSl-xD4Hi12Ux7/exec'; 
-        /*
-            HOW TO GET YOUR GOOGLE_SHEET_URL:
-            1. Create a new Google Sheet (e.g., at sheets.new).
-            2. In the sheet, go to the menu: Extensions > Apps Script.
-            3. A new browser tab will open with the script editor.
-            4. Delete any existing code in the `Code.gs` file.
-            5. Copy the entire content of the `google-apps-script.gs` file from this project and 
-               paste it into the Apps Script editor.
-            6. Click the "Save project" icon (floppy disk).
-            7. In the top right, click "Deploy" > "New deployment".
-            8. In the "Select type" dialog (click the gear icon), choose "Web app".
-            9. Configure the web app:
-               - Description: "Store Audit Checklist Backend" (or anything you like).
-               - Execute as: "Me".
-               - Who has access: "Anyone". 
-                 (IMPORTANT: This is required for the app to save data from any browser. 
-                  Your data is kept private by the unique, unguessable session ID.)
-            10. Click "Deploy".
-            11. Google will ask you to authorize the script. Click "Authorize access" and
-                follow the prompts to allow it to access your spreadsheets. 
-                (You may see a "Google hasn't verified this app" screen. Click "Advanced" 
-                 and then "Go to [Your Project Name] (unsafe)" to proceed.)
-            12. After deploying, a dialog will appear with a "Web app URL". Copy this URL.
-            13. Paste the copied URL into the `GOOGLE_SHEET_URL` constant above.
-            14. That's it! Your app will now save data to your Google Sheet.
-        */
-        // --- END: Google Sheets Configuration ---
+        
+    </script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDVI7Ij3C9cKHHrHT_tipqew_9FOvAQk0A",
+            authDomain: "store-audit-49cdd.firebaseapp.com",
+            projectId: "store-audit-49cdd",
+            storageBucket: "store-audit-49cdd.firebasestorage.app",
+            messagingSenderId: "957701379208",
+            appId: "1:957701379208:web:f1a6cd79b54322fdd1fb3d",
+            measurementId: "G-GHX5ZBTGLE"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const FIREBASE_DOC_PATH = "audit_questions/default";
+
+        // Firebase helper functions
+        const saveQuestionsToFirebase = async (sections) => {
+            try {
+                await db.doc(FIREBASE_DOC_PATH).set({ sections, updatedAt: new Date() });
+                console.log("✅ Questions saved to Firebase");
+            } catch (err) { console.error("❌ Error saving:", err); }
+        };
+
+        const loadQuestionsFromFirebase = async () => {
+            try {
+                const doc = await db.doc(FIREBASE_DOC_PATH).get();
+                if (doc.exists) return doc.data().sections;
+                return null;
+            } catch (err) { console.error("Error loading:", err); return null; }
+        };
+
+        const subscribeToQuestions = (callback) => {
+            return db.doc(FIREBASE_DOC_PATH).onSnapshot((doc) => {
+                if (doc.exists) callback(doc.data().sections);
+            });
+        };
     </script>
 
     <script type="text/babel" data-type="module">
@@ -909,4 +919,3 @@ const loadAuditData = async (sessionId) => {
     </script>
 </body>
 </html>
-
