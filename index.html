@@ -459,9 +459,14 @@ const loadAuditData = async (sessionId) => {
 
 
             const resetChecklist = useCallback(async () => {
-                await clearAuditData(sessionId);
-                setAuditState(getInitialState());
-            }, [sessionId, getInitialState]);
+    // Generate a brand new session ID for the new audit
+    const newSession = generateUUID();
+    localStorage.setItem(SESSION_ID_KEY, newSession);
+    localStorage.removeItem(`audit-data-${sessionId}`);
+    setAuditState(getInitialState());
+    window.location.reload(); // optional, to refresh form cleanly
+}, [sessionId, getInitialState]);
+
 
             const progress = useMemo(() => {
                 const answeredCount = Object.values(auditState.answers).filter(a => a && a.response !== 'unanswered').length;
