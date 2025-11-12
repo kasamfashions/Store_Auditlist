@@ -105,59 +105,64 @@
     <!-- Firebase SDKs -->
 <!-- Firebase SDKs -->
 <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyDVI7Ij3C9cKHHrHT_tipqew_9FOvAQk0A",
-        authDomain: "store-audit-49cdd.firebaseapp.com",
-        projectId: "store-audit-49cdd",
-        storageBucket: "store-audit-49cdd.firebasestorage.app",
-        messagingSenderId: "957701379208",
-        appId: "1:957701379208:web:f1a6cd79b54322fdd1fb3d",
-        measurementId: "G-GHX5ZBTGLE"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyDVI7Ij3C9cKHHrHT_tipqew_9FOvAQk0A",
+  authDomain: "store-audit-49cdd.firebaseapp.com",
+  projectId: "store-audit-49cdd",
+  storageBucket: "store-audit-49cdd.firebasestorage.app",
+  messagingSenderId: "957701379208",
+  appId: "1:957701379208:web:f1a6cd79b54322fdd1fb3d",
+  measurementId: "G-GHX5ZBTGLE"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
-    const FIREBASE_DOC_PATH = "audit_questions/default";
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const FIREBASE_DOC_PATH = "audit_questions/default";
 
-    // Save questions to Firestore
-    window.saveQuestionsToFirebase = async (sections) => {
-        try {
-            await setDoc(doc(db, FIREBASE_DOC_PATH.split('/')[0], FIREBASE_DOC_PATH.split('/')[1]), {
-                sections,
-                updatedAt: new Date()
-            });
-            console.log("✅ Questions saved to Firebase");
-        } catch (err) {
-            console.error("❌ Error saving:", err);
-        }
-    };
+// ✅ Attach to window explicitly after defining them
+window.saveQuestionsToFirebase = async (sections) => {
+  try {
+    await setDoc(doc(db, "audit_questions", "default"), {
+      sections,
+      updatedAt: new Date()
+    });
+    console.log("✅ Questions saved to Firebase");
+  } catch (err) {
+    console.error("❌ Error saving:", err);
+    alert("Error saving to Firebase. Please check your internet connection.");
+  }
+};
 
-    // Load questions from Firestore
-    window.loadQuestionsFromFirebase = async () => {
-        try {
-            const ref = doc(db, FIREBASE_DOC_PATH.split('/')[0], FIREBASE_DOC_PATH.split('/')[1]);
-            const snapshot = await getDoc(ref);
-            if (snapshot.exists()) {
-                console.log("✅ Questions loaded from Firebase");
-                return snapshot.data().sections;
-            }
-            return null;
-        } catch (err) {
-            console.error("❌ Error loading:", err);
-            return null;
-        }
-    };
+window.loadQuestionsFromFirebase = async () => {
+  try {
+    const ref = doc(db, "audit_questions", "default");
+    const snapshot = await getDoc(ref);
+    if (snapshot.exists()) {
+      console.log("✅ Questions loaded from Firebase");
+      return snapshot.data().sections;
+    }
+    console.warn("⚠️ No Firebase data found");
+    return null;
+  } catch (err) {
+    console.error("❌ Error loading:", err);
+    return null;
+  }
+};
 
-    // Subscribe to live changes
-    window.subscribeToQuestions = (callback) => {
-        const ref = doc(db, FIREBASE_DOC_PATH.split('/')[0], FIREBASE_DOC_PATH.split('/')[1]);
-        return onSnapshot(ref, (snapshot) => {
-            if (snapshot.exists()) callback(snapshot.data().sections);
-        });
-    };
+window.subscribeToQuestions = (callback) => {
+  const ref = doc(db, "audit_questions", "default");
+  return onSnapshot(ref, (snapshot) => {
+    if (snapshot.exists()) {
+      console.log("🔥 Realtime update received from Firebase");
+      callback(snapshot.data().sections);
+    }
+  });
+};
+</script>
+
 </script>
     <script type="text/babel" data-type="module">
         // In-browser module imports from CDN
