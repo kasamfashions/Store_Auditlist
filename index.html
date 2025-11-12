@@ -96,6 +96,130 @@
 <body>
     <div id="root"></div>
     
+    <script>
+        // --- START: Google Sheets Configuration ---
+        // IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
+        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzaFJB5Vud2TpD8_SA81gemWm64sITp2G2cljVLS1JDOY7G9mN4FgudMNoiQxgWTJbR/exec';
+        /*
+            HOW TO GET YOUR GOOGLE_SHEET_URL:
+            1. Create a new Google Sheet (e.g., at sheets.new).
+            2. In the sheet, go to the menu: Extensions > Apps Script.
+            3. A new browser tab will open with the script editor.
+            4. Delete any existing code in the `Code.gs` file and paste the entire Apps Script
+               code provided below this comment block.
+            5. Click the "Save project" icon (floppy disk).
+            6. In the top right, click "Deploy" > "New deployment".
+            7. In the "Select type" dialog (click the gear icon), choose "Web app".
+            8. Configure the web app:
+               - Description: "Store Audit Checklist Backend" (or anything you like).
+               - Execute as: "Me".
+               - Who has access: "Anyone". 
+                 (IMPORTANT: This is required for the app to save data from any browser. 
+                  Your data is kept private by the unique, unguessable session ID.)
+            9. Click "Deploy".
+            10. Google will ask you to authorize the script. Click "Authorize access" and
+                follow the prompts to allow it to access your spreadsheets. 
+                (You may see a "Google hasn't verified this app" screen. Click "Advanced" 
+                 and then "Go to [Your Project Name] (unsafe)" to proceed.)
+            11. After deploying, a dialog will appear with a "Web app URL". Copy this URL.
+            12. Paste the copied URL into the `GOOGLE_SHEET_URL` constant above.
+            13. That's it! Your app will now save data to your Google Sheet.
+        */
+
+        /* --- START OF GOOGLE APPS SCRIPT CODE (to be pasted in Code.gs) ---
+
+        const SHEET_NAME = 'AuditData';
+
+        function getSheet() {
+          const ss = SpreadsheetApp.getActiveSpreadsheet();
+          let sheet = ss.getSheetByName(SHEET_NAME);
+          if (!sheet) {
+            sheet = ss.insertSheet(SHEET_NAME);
+            sheet.getRange('A1:B1').setValues([['SessionID', 'AuditDataJSON']]).setFontWeight('bold');
+            sheet.setColumnWidth(1, 250);
+            sheet.setColumnWidth(2, 800);
+          }
+          return sheet;
+        }
+
+        function findRowBySessionId(sheet, sessionId) {
+          if (!sessionId) return -1;
+          const data = sheet.getRange('A:A').getValues();
+          for (let i = 0; i < data.length; i++) {
+            if (data[i][0] == sessionId) {
+              return i + 1; // Return 1-based row index
+            }
+          }
+          return -1;
+        }
+
+        // Handles POST requests (save, clear)
+        function doPost(e) {
+          let response = { status: 'error', message: 'An unknown error occurred.' };
+          try {
+            if (!e.postData || !e.postData.contents) {
+              throw new Error("No data received in POST request.");
+            }
+            const payload = JSON.parse(e.postData.contents);
+            const sheet = getSheet();
+
+            switch (payload.action) {
+              case 'save':
+                const row = findRowBySessionId(sheet, payload.sessionId);
+                if (row !== -1) {
+                  sheet.getRange(row, 2).setValue(payload.data);
+                } else {
+                  sheet.appendRow([payload.sessionId, payload.data]);
+                }
+                response = { status: 'success', message: 'Data saved.' };
+                break;
+
+              case 'clear':
+                const rowToClear = findRowBySessionId(sheet, payload.sessionId);
+                if (rowToClear !== -1) {
+                  sheet.deleteRow(rowToClear);
+                }
+                response = { status: 'success', message: 'Data cleared.' };
+                break;
+
+              default:
+                 response = { status: 'error', message: 'Invalid action.' };
+                 break;
+            }
+          } catch (error) {
+            response = { status: 'error', message: error.toString() };
+          }
+          return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON);
+        }
+
+        // Handles GET requests (load)
+        function doGet(e) {
+          try {
+            const action = e.parameter.action;
+            const sessionId = e.parameter.sessionId;
+
+            if (action === 'load' && sessionId) {
+              const sheet = getSheet();
+              const row = findRowBySessionId(sheet, sessionId);
+
+              if (row !== -1) {
+                const data = sheet.getRange(row, 2).getValue();
+                return ContentService.createTextOutput(data).setMimeType(ContentService.MimeType.JSON);
+              } else {
+                return ContentService.createTextOutput(JSON.stringify(null)).setMimeType(ContentService.MimeType.JSON);
+              }
+            } else {
+              return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: 'Invalid or missing parameters.' })).setMimeType(ContentService.MimeType.JSON);
+            }
+          } catch (error) {
+             return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+          }
+        }
+        
+        --- END OF GOOGLE APPS SCRIPT CODE --- */
+        // --- END: Google Sheets Configuration ---
+    </script>
+
     <script type="text/babel" data-type="module">
         // In-browser module imports from CDN
         const { useState, useEffect, useCallback, useMemo, StrictMode, useRef } = React;
@@ -117,7 +241,6 @@
         //============================================
         // CONSTANTS: constants.ts
         //============================================
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaFJB5Vud2TpD8_SA81gemWm64sITp2G2cljVLS1JDOY7G9mN4FgudMNoiQxgWTJbR/exec';
         const SESSION_ID_KEY = 'audit-session-id';
         const QUESTIONS_STORAGE_KEY = 'audit-questions';
         const DEFAULT_SECTIONS = [
@@ -211,6 +334,10 @@
         //============================================
         // SERVICES: storageService.ts
         //============================================
+        const isGoogleSheetConfigured = () => {
+            return typeof GOOGLE_SHEET_URL !== 'undefined' && GOOGLE_SHEET_URL && GOOGLE_SHEET_URL !== 'YOUR_GOOGLE_SHEET_WEB_APP_URL';
+        }
+
         const getSessionId = () => {
             let sessionId = localStorage.getItem(SESSION_ID_KEY);
             if (!sessionId) {
@@ -221,41 +348,59 @@
         };
 
         const saveAuditData = async (sessionId, auditState, allQuestions) => {
-            if (GOOGLE_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzaFJB5Vud2TpD8_SA81gemWm64sITp2G2cljVLS1JDOY7G9mN4FgudMNoiQxgWTJbR/exec') {
-                console.warn('Google Sheets URL not set. Saving to localStorage.');
-                localStorage.setItem(`audit-data-${sessionId}`, JSON.stringify(auditState));
+            const dataToSave = { ...auditState, allQuestions };
+            const localDataString = JSON.stringify(dataToSave);
+
+            if (!isGoogleSheetConfigured()) {
+                console.warn('Google Sheet URL not configured. Saving to localStorage.');
+                localStorage.setItem(`audit-data-${sessionId}`, localDataString);
                 return;
             }
+
+            const payload = {
+                action: 'save',
+                sessionId: sessionId,
+                data: localDataString
+            };
+
             try {
-                await fetch(GOOGLE_SCRIPT_URL, {
+                const response = await fetch(GOOGLE_SHEET_URL, {
                     method: 'POST',
-                    mode: 'cors',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ sessionId, ...auditState, allQuestions }),
+                    body: JSON.stringify(payload),
                 });
+                 if (!response.ok) {
+                   throw new Error(`Network response was not ok, status: ${response.status}`);
+                }
             } catch (error) {
-                console.error('Error saving data to Google Sheets, saving to localStorage instead:', error);
-                localStorage.setItem(`audit-data-${sessionId}`, JSON.stringify(auditState));
+                console.error('Error saving data to Google Sheet, saving to localStorage instead:', error);
+                localStorage.setItem(`audit-data-${sessionId}`, localDataString);
             }
         };
 
         const loadAuditData = async (sessionId) => {
-            if (GOOGLE_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzaFJB5Vud2TpD8_SA81gemWm64sITp2G2cljVLS1JDOY7G9mN4FgudMNoiQxgWTJbR/exec') {
-                console.warn('Google Sheets URL not set. Loading from localStorage.');
+            if (!isGoogleSheetConfigured()) {
+                console.warn('Google Sheet URL not configured. Loading from localStorage.');
                 const localData = localStorage.getItem(`audit-data-${sessionId}`);
                 return localData ? JSON.parse(localData) : null;
             }
+            
+            const url = new URL(GOOGLE_SHEET_URL);
+            url.searchParams.append('action', 'load');
+            url.searchParams.append('sessionId', sessionId);
+
             try {
-                const response = await fetch(`${GOOGLE_SCRIPT_URL}?sessionId=${encodeURIComponent(sessionId)}`, { method: 'GET', mode: 'cors' });
+                const response = await fetch(url);
+                 if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
-                if (data.error) {
-                    console.warn("No data found in Google Sheets, checking localStorage.");
-                    const localData = localStorage.getItem(`audit-data-${sessionId}`);
-                    return localData ? JSON.parse(localData) : null;
+                if (data === null) {
+                    console.log("No data found in Google Sheets for this session.");
+                    return null;
                 }
                 return data;
             } catch (error) {
-                console.error('Error loading data from Google Sheets, trying localStorage:', error);
+                console.error('Error loading data from Google Sheet, trying localStorage:', error);
                 const localData = localStorage.getItem(`audit-data-${sessionId}`);
                 return localData ? JSON.parse(localData) : null;
             }
@@ -263,14 +408,23 @@
 
         const clearAuditData = async (sessionId) => {
             localStorage.removeItem(`audit-data-${sessionId}`);
-            if (GOOGLE_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzaFJB5Vud2TpD8_SA81gemWm64sITp2G2cljVLS1JDOY7G9mN4FgudMNoiQxgWTJbR/exec') return;
+            if (!isGoogleSheetConfigured()) return;
+
+            const payload = {
+                action: 'clear',
+                sessionId: sessionId
+            };
+            
             try {
-                await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST', mode: 'cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ sessionId, action: 'clear' }),
+                 const response = await fetch(GOOGLE_SHEET_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
                 });
+                if (!response.ok) {
+                    throw new Error(`Network response was not ok, status: ${response.status}`);
+                }
             } catch (error) {
-                console.error('Error clearing remote data:', error);
+                 console.error('Error clearing remote data from Google Sheet:', error);
             }
         };
 
@@ -317,7 +471,7 @@
                     const loadedData = await loadAuditData(sessionId);
                     const initialState = getInitialState();
                     if (loadedData) {
-                        const loadedAnswers = loadedData.answers || loadedData;
+                        const loadedAnswers = loadedData.answers || {};
                         const mergedAnswers = { ...initialState.answers };
                         for (const qId in loadedAnswers) {
                             if (qId in initialState.answers) {
@@ -624,6 +778,14 @@
                 }
             });
 
+            useEffect(() => {
+                if (!isGoogleSheetConfigured()) {
+                    setTimeout(() => {
+                        alert("Your Google Sheet URL is not configured. Your audit data will be saved locally to this browser only. Follow the instructions in index.html to set up cloud storage with Google Sheets.");
+                    }, 1000);
+                }
+            }, []);
+
             const {
                 auditState, progress, isSaving, handleResponseChange,
                 handleCommentChange, handleFieldChange, handleSubmit, resetChecklist
@@ -660,6 +822,8 @@
                 setSections(newSections);
                 localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(newSections));
                 setIsEditorOpen(false);
+                // After questions change, we might want to refresh the audit state
+                window.location.reload(); 
             };
 
             return (
