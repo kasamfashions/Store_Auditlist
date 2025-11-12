@@ -734,15 +734,48 @@ const loadAuditData = async (sessionId) => {
         //============================================
         const App = () => {
             const [isEditorOpen, setIsEditorOpen] = useState(false);
-            const [sections, setSections] = useState(() => {
-                try {
-                    const saved = localStorage.getItem(QUESTIONS_STORAGE_KEY);
-                    return saved ? JSON.parse(saved) : DEFAULT_SECTIONS;
-                } catch (e) {
-                    console.error("Failed to load sections from localStorage", e);
-                    return DEFAULT_SECTIONS;
+            const [sections, setSections] = useState(DEFAULT_SECTIONS);
+const [loadingQuestions, setLoadingQuestions] = useState(true);
+
+useEffect(() => {
+    const fetchQuestions = async () => {
+        try {
+            // First, try Firebase
+            const firebaseSections = await window.loadQuestionsFromFirebase();
+            if (firebaseSections && Array.isArray(firebaseSections)) {
+                console.log("✅ Loaded sections from Firebase");
+                setSections(firebaseSections);
+                localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(firebaseSections));
+            } else {
+                // If Firebase is empty, fall back to localStorage
+                const local = localStorage.getItem(QUESTIONS_STORAGE_KEY);
+                if (local) {
+                    console.log("⚠️ Firebase empty, using local storage");
+                    setSections(JSON.parse(local));
+                } else {
+                    console.log("⚠️ No Firebase data, using default questions");
+                    setSections(DEFAULT_SECTIONS);
                 }
+            }
+
+            // 🔄 Auto-sync live changes from Firebase
+            window.subscribeToQuestions((updatedSections) => {
+                console.log("🔥 Realtime update from Firebase");
+                setSections(updatedSections);
+                localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(updatedSections));
             });
+        } catch (error) {
+            console.error("❌ Error loading sections:", error);
+            const local = localStorage.getItem(QUESTIONS_STORAGE_KEY);
+            setSections(local ? JSON.parse(local) : DEFAULT_SECTIONS);
+        } finally {
+            setLoadingQuestions(false);
+        }
+    };
+
+    fetchQuestions();
+}, []);
+
 
             useEffect(() => {
                 if (!isGoogleSheetConfigured()) {
@@ -826,6 +859,7 @@ const loadAuditData = async (sessionId) => {
                                         defaultOpen={index === 0}
                                     />
                                 ))}
+                                
                                 {/* --- Summary & Action Plan Section --- */}
 <div className="bg-white/80 backdrop-blur-lg p-6 rounded-xl shadow-lg mb-6 print:shadow-none mt-10">
     <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📝 Summary & Action Plan</h2>
@@ -939,4 +973,3 @@ const loadAuditData = async (sessionId) => {
     </script>
 </body>
 </html>
-
