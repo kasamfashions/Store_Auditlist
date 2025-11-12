@@ -796,6 +796,86 @@ const loadAuditData = async (sessionId) => {
                                         defaultOpen={index === 0}
                                     />
                                 ))}
+                                {/* --- Summary & Action Plan Section --- */}
+<div className="bg-white/80 backdrop-blur-lg p-6 rounded-xl shadow-lg mb-6 print:shadow-none mt-10">
+    <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📝 Summary & Action Plan</h2>
+    
+    {/* Key Strengths */}
+    <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-700 mb-2">Key Strengths:</h3>
+        {[1, 2].map((i) => (
+            <input
+                key={`strength-${i}`}
+                type="text"
+                placeholder={`Strength ${i}`}
+                value={auditState[`strength${i}`] || ""}
+                onChange={(e) => handleFieldChange(`strength${i}`, e.target.value)}
+                disabled={isSubmitted}
+                className="w-full mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm disabled:bg-gray-100"
+            />
+        ))}
+    </div>
+
+    {/* Opportunities for Improvement */}
+    <div className="mb-6">
+        <h3 className="text-lg font-semibold text-gray-700 mb-3">Top 3 Opportunities for Improvement:</h3>
+        {[1, 2, 3].map((i) => (
+            <div key={`opportunity-${i}`} className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                <input
+                    type="text"
+                    placeholder={`Opportunity ${i}`}
+                    value={auditState[`opp${i}`] || ""}
+                    onChange={(e) => handleFieldChange(`opp${i}`, e.target.value)}
+                    disabled={isSubmitted}
+                    className="col-span-1 md:col-span-1 p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-gray-100"
+                />
+                <input
+                    type="text"
+                    placeholder="Action"
+                    value={auditState[`oppAction${i}`] || ""}
+                    onChange={(e) => handleFieldChange(`oppAction${i}`, e.target.value)}
+                    disabled={isSubmitted}
+                    className="p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-gray-100"
+                />
+                <input
+                    type="text"
+                    placeholder="By (Name/Date)"
+                    value={auditState[`oppBy${i}`] || ""}
+                    onChange={(e) => handleFieldChange(`oppBy${i}`, e.target.value)}
+                    disabled={isSubmitted}
+                    className="p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-gray-100"
+                />
+            </div>
+        ))}
+    </div>
+
+    {/* Signatures */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Auditor Signature:</label>
+            <input
+                type="text"
+                placeholder="Auditor Name or Signature"
+                value={auditState.auditorSignature || ""}
+                onChange={(e) => handleFieldChange('auditorSignature', e.target.value)}
+                disabled={isSubmitted}
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-gray-100"
+            />
+        </div>
+        <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Store Manager Signature:</label>
+            <input
+                type="text"
+                placeholder="Manager Name or Signature"
+                value={auditState.managerSignature || ""}
+                onChange={(e) => handleFieldChange('managerSignature', e.target.value)}
+                disabled={isSubmitted}
+                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-gray-100"
+            />
+        </div>
+    </div>
+</div>
+
                             </div>
                         </div>
                     </main>
@@ -829,3 +909,4 @@ const loadAuditData = async (sessionId) => {
     </script>
 </body>
 </html>
+
