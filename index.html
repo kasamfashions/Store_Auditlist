@@ -99,7 +99,7 @@
     <script>
         // --- START: Google Sheets Configuration ---
         // IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
-        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxyDVZSTyDcD7zdPYT4T-MTC1fXdH44n3AxfYVWUL5kxNWXrdNAbvTGhrTvO72_tOc/exec'; 
+        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxNlxJmY-xBuFN74JfnleMYiLiUj1BRe6QsTKj29Ky9ss0Cm5v8TNLp3SpY94q88j9g/exec'; 
         /*
             HOW TO GET YOUR GOOGLE_SHEET_URL:
             1. Create a new Google Sheet (e.g., at sheets.new).
@@ -286,34 +286,49 @@
             }
         };
 
-        const loadAuditData = async (sessionId) => {
-            if (!isGoogleSheetConfigured()) {
-                console.warn('Google Sheet URL not configured. Loading from localStorage.');
-                const localData = localStorage.getItem(`audit-data-${sessionId}`);
-                return localData ? JSON.parse(localData) : null;
-            }
-            
-            const url = new URL(GOOGLE_SHEET_URL);
-            url.searchParams.append('action', 'load');
-            url.searchParams.append('sessionId', sessionId);
+const loadAuditData = async (sessionId) => {
+    if (!isGoogleSheetConfigured()) {
+        console.warn('Google Sheet URL not configured. Loading from localStorage.');
+        const localData = localStorage.getItem(`audit-data-${sessionId}`);
+        return localData ? JSON.parse(localData) : null;
+    }
 
-            try {
-                const response = await fetch(url);
-                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                const data = await response.json();
-                if (data === null) {
-                    console.log("No data found in Google Sheets for this session.");
-                    return null;
-                }
-                return data;
-            } catch (error) {
-                console.error('Error loading data from Google Sheet, trying localStorage:', error);
-                const localData = localStorage.getItem(`audit-data-${sessionId}`);
-                return localData ? JSON.parse(localData) : null;
-            }
-        };
+    try {
+        const response = await fetch(GOOGLE_SHEET_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                action: "load",
+                sessionId: sessionId
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const sheetData = await response.json();
+        if (!Array.isArray(sheetData) || sheetData.length === 0) {
+            console.log("No saved data found for this session.");
+            return null;
+        }
+
+        // Transform data into auditState structure
+        const answers = {};
+        sheetData.forEach(item => {
+            const questionId = Object.keys(DEFAULT_SECTIONS.flatMap(s => s.questions))
+                .find(id => id === item.question);
+            answers[questionId] = { response: item.answer || "unanswered", comment: item.comment || "" };
+        });
+
+        return { answers };
+    } catch (error) {
+        console.error('Error loading data from Google Sheet:', error);
+        const localData = localStorage.getItem(`audit-data-${sessionId}`);
+        return localData ? JSON.parse(localData) : null;
+    }
+};
+
 
         const clearAuditData = async (sessionId) => {
             localStorage.removeItem(`audit-data-${sessionId}`);
@@ -802,5 +817,3 @@
     </script>
 </body>
 </html>
-
-
