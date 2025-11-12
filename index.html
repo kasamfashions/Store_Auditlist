@@ -817,13 +817,23 @@ useEffect(() => {
                 }
             };
 
-            const handleSaveQuestions = (newSections) => {
-                setSections(newSections);
-                localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(newSections));
-                setIsEditorOpen(false);
-                // After questions change, we might want to refresh the audit state
-                window.location.reload(); 
-            };
+            const handleSaveQuestions = async (newSections) => {
+    try {
+        setSections(newSections);
+        localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(newSections));
+
+        // 🔥 Save to Firebase so data persists
+        await window.saveQuestionsToFirebase(newSections);
+
+        setIsEditorOpen(false);
+        alert("✅ Checklist questions updated successfully!");
+        window.location.reload(); // refresh to apply live
+    } catch (err) {
+        console.error("❌ Error saving updated questions:", err);
+        alert("Error saving to Firebase. Please check your internet connection or Firebase rules.");
+    }
+};
+
 
             return (
                 <div className="min-h-screen font-sans text-gray-800">
