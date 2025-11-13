@@ -108,60 +108,61 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore.js";
 
-// ✅ Correct Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDVI7Ij3C9cKHHrHT_tipqew_9FOvAQk0A",
   authDomain: "store-audit-49cdd.firebaseapp.com",
   projectId: "store-audit-49cdd",
-  storageBucket: "store-audit-49cdd.appspot.com",  // 🔥 FIXED
+  storageBucket: "store-audit-49cdd.firebasestorage.app",
   messagingSenderId: "957701379208",
   appId: "1:957701379208:web:f1a6cd79b54322fdd1fb3d",
   measurementId: "G-GHX5ZBTGLE"
 };
 
-// ✅ Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// ✅ Save sections to Firestore
+// ✅ Save sections
 window.saveQuestionsToFirebase = async (sections) => {
   try {
-    const ref = doc(db, "audit_questions", "default");
-    await setDoc(ref, { sections, updatedAt: new Date().toISOString() });
-    console.log("✅ Questions saved to Firebase");
-    alert("✅ Questions saved successfully to Firebase!");
+    const docRef = doc(db, "audit_questions", "default");
+    await setDoc(docRef, {
+      sections: JSON.parse(JSON.stringify(sections)), // deep copy ensures clean data
+      updatedAt: new Date().toISOString(),
+    }, { merge: true }); // ✅ merge to avoid overwriting with null accidentally
+
+    console.log("✅ Questions saved to Firebase successfully");
   } catch (err) {
-    console.error("❌ Error saving to Firebase:", err);
-    alert("Error saving to Firebase. Please check your Firebase permissions or connection.");
+    console.error("❌ Error saving questions to Firebase:", err);
+    alert("Error saving to Firebase. Please check your connection or Firebase rules.");
   }
 };
 
-// ✅ Load questions from Firestore
+
+// ✅ Load sections
 window.loadQuestionsFromFirebase = async () => {
   try {
     const ref = doc(db, "audit_questions", "default");
     const snapshot = await getDoc(ref);
     if (snapshot.exists()) {
-      console.log("✅ Loaded sections from Firebase");
       const data = snapshot.data();
-      return data.sections || [];
-    } else {
-      console.warn("⚠️ No Firebase data found");
-      return null;
+      console.log("✅ Loaded sections from Firebase");
+      return data.sections || null;
     }
+    console.warn("⚠️ No Firebase data found");
+    return null;
   } catch (err) {
-    console.error("❌ Error loading from Firebase:", err);
+    console.error("❌ Error loading:", err);
     return null;
   }
 };
 
-// ✅ Real-time sync
+// ✅ Listen for live updates
 window.subscribeToQuestions = (callback) => {
   const ref = doc(db, "audit_questions", "default");
   return onSnapshot(ref, (snapshot) => {
     if (snapshot.exists()) {
-      console.log("🔥 Realtime update received from Firebase");
       const data = snapshot.data();
+      console.log("🔥 Realtime update received from Firebase");
       callback(data.sections || []);
     }
   });
@@ -749,32 +750,37 @@ const [loadingQuestions, setLoadingQuestions] = useState(true);
 useEffect(() => {
     const fetchQuestions = async () => {
         try {
-            // First, try Firebase
+            // ✅ Try loading from Firebase first
             const firebaseSections = await window.loadQuestionsFromFirebase();
+            
             if (firebaseSections && Array.isArray(firebaseSections)) {
                 console.log("✅ Loaded sections from Firebase");
                 setSections(firebaseSections);
                 localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(firebaseSections));
             } else {
-                // If Firebase is empty, fall back to localStorage
+                // ❌ Firebase empty, use local storage or fallback
                 const local = localStorage.getItem(QUESTIONS_STORAGE_KEY);
                 if (local) {
-                    console.log("⚠️ Firebase empty, using local storage");
+                    console.warn("⚠️ Firebase empty, using local storage");
                     setSections(JSON.parse(local));
                 } else {
-                    console.log("⚠️ No Firebase data, using default questions");
+                    console.warn("⚠️ No Firebase data found, using default questions");
                     setSections(DEFAULT_SECTIONS);
                 }
             }
 
-            // 🔄 Auto-sync live changes from Firebase
-            window.subscribeToQuestions((updatedSections) => {
-                console.log("🔥 Realtime update from Firebase");
-                setSections(updatedSections);
-                localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(updatedSections));
+            // ✅ Subscribe to live updates *after initial load*
+            const unsubscribe = window.subscribeToQuestions((updatedSections) => {
+                if (updatedSections && updatedSections.length > 0) {
+                    console.log("🔥 Realtime update from Firebase");
+                    setSections(updatedSections);
+                    localStorage.setItem(QUESTIONS_STORAGE_KEY, JSON.stringify(updatedSections));
+                }
             });
+
+            return () => unsubscribe && unsubscribe(); // Cleanup listener
         } catch (error) {
-            console.error("❌ Error loading sections:", error);
+            console.error("❌ Error loading questions from Firebase:", error);
             const local = localStorage.getItem(QUESTIONS_STORAGE_KEY);
             setSections(local ? JSON.parse(local) : DEFAULT_SECTIONS);
         } finally {
@@ -784,8 +790,6 @@ useEffect(() => {
 
     fetchQuestions();
 }, []);
-
-
             useEffect(() => {
                 if (!isGoogleSheetConfigured()) {
                     setTimeout(() => {
@@ -987,4 +991,3 @@ useEffect(() => {
     </script>
 </body>
 </html>
-
