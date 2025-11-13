@@ -96,7 +96,7 @@
     <script>
         // --- START: Google Sheets Configuration ---
         // IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
-        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbz4JK4ucG_gTL5t5b7zr4R37gIFyZ2C3O52kNxuKcHhO3_qupt0C6vSl-xD4Hi12Ux7/exec'; 
+        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbw_IePPgvYSYWnf7zAFIQNijMSUT6lhtMHyfUr6KB2OFlO2ja38XkUBHJ9TXSFTvCAz/exec'; 
         
     </script>
     <script type="module">
@@ -351,18 +351,56 @@ const loadAuditData = async (sessionId) => {
             return null;
         }
 
-        // Map saved answers to question IDs
-        const answers = {};
-        data.forEach(item => {
-            answers[item.id] = {
-                response: item.answer || "unanswered",
-                comment: item.comment || ""
-            };
-        });
+        const loadedAuditState = { answers: {} };
 
-        return { answers };
+        data.forEach(item => {
+            const id = item.id;
+            
+            // Check if the ID is a checklist question ID (likely 2-4 chars followed by 1-2 digits, e.g., ext1)
+            // A simple heuristic: if the 'answer' field is not empty, it's likely a checklist response.
+            if (item.answer) {
+                 loadedAuditState.answers[id] = {
+                    response: item.answer || 'unanswered',
+                    comment: item.comment || ''
+                };
+            } 
+            // The following IDs are summary fields. The data is in the 'comment' or 'answer' field.
+            else if (id.startsWith('strength') || id.startsWith('opp') || id === 'auditorSignature' || id === 'managerSignature') {
+                if (id.startsWith('strength') || id === 'auditorSignature' || id === 'managerSignature') {
+                    // Strengths and Signatures map their 'comment' field directly to the state key
+                    loadedAuditState[id] = item.comment || '';
+                } else if (id.startsWith('opp') && id.length === 4) {
+                    // Opportunities (opp1, opp2, opp3) map their 'answer' field to the state key
+                    loadedAuditState[id] = item.answer || '';
+                } 
+                // Need to manually reconstruct the Action and By fields from the Opportunity row's actionComment
+                // This is complex because we don't know the owner from the row content itself.
+                // A simpler approach for the Action/Owner fields is to rely on local storage, 
+                // but we can try to get the Action/Comment field:
+                
+                // Action (e.g., oppAction1) is stored in the 'comment' field
+                if (id.startsWith('opp') && id.length === 4 && item.comment) {
+                     loadedAuditState[`${id}Action`] = item.comment || '';
+                }
+                
+                // The owner/by field (e.g., oppBy1) is typically embedded in the question text. 
+                // We'll rely on the local storage or default state for this complex-to-reconstruct field.
+            }
+        });
+        
+        // Merge with local storage to capture fields like auditDate, storeName, and complex fields like oppBy1
+        const localData = localStorage.getItem(`audit-data-${sessionId}`);
+        const localState = localData ? JSON.parse(localData) : {};
+        
+        return {
+             ...localState, 
+             ...loadedAuditState,
+             answers: { ...localState.answers, ...loadedAuditState.answers }
+        };
+
     } catch (error) {
         console.error('Error loading data from Google Sheet:', error);
+        // Fallback entirely to local storage if remote load fails
         const localData = localStorage.getItem(`audit-data-${sessionId}`);
         return localData ? JSON.parse(localData) : null;
     }
@@ -412,6 +450,13 @@ const loadAuditData = async (sessionId) => {
                 storeName: '',
                 auditDate: new Date().toISOString().split('T')[0],
                 isSubmitted: false,
+                // --- ADDED INITIAL STATE FOR SUMMARY FIELDS ---
+                strength1: '', strength2: '',
+                opp1: '', oppAction1: '', oppBy1: '',
+                opp2: '', oppAction2: '', oppBy2: '',
+                opp3: '', oppAction3: '', oppBy3: '',
+                auditorSignature: '', managerSignature: '',
+                // ---------------------------------------------
             }), [createInitialAnswers]);
 
             const [auditState, setAuditState] = useState(getInitialState());
@@ -505,17 +550,20 @@ const loadAuditData = async (sessionId) => {
             const { score, maxScore, progress } = useMemo(() => {
                 let currentScore = 0;
                 let totalPossibleScore = 0;
+                
+                // --- UPDATED SCORE MAPPING FOR EXCELLENT/GOOD/FAIR/POOR ---
                 const scoreMap = {
-                    'yes': 3,
-                    'partial': 1,
-                    'no': 0,
+                    'excellent': 4,
+                    'good': 3,
+                    'fair': 2,
+                    'poor': 0,
                     'unanswered': 0
                 };
                 
                 // Calculate scores and max score
                 ALL_QUESTIONS.forEach(question => {
                     const answer = auditState.answers[question.id];
-                    totalPossibleScore += 3; // Max score for any question is 3 (for 'yes')
+                    totalPossibleScore += 4; // Max score for any question is 4 (for 'excellent')
                     if (answer && answer.response) {
                         currentScore += scoreMap[answer.response] || 0;
                     }
@@ -550,6 +598,7 @@ const loadAuditData = async (sessionId) => {
                 edit: <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
                 plus: <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>,
                 trash: <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+                star: <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.637-.921 1.938 0l2.56 7.854a1 1 0 00.95.69h8.216c.969 0 1.371 1.24.588 1.81l-6.65 4.86a1 1 0 00-.363 1.118l2.56 7.854c.3.921-.755 1.688-1.54 1.118l-6.65-4.86a1 1 0 00-1.175 0l-6.65 4.86c-.784.57-1.84-.197-1.54-1.118l2.56-7.854a1 1 0 00-.363-1.118l-6.65-4.86c-.783-.57-.38-1.81.588-1.81h8.216a1 1 0 00.95-.69l2.56-7.854z" /></svg>,
             };
             return icons[type] || null;
         };
@@ -601,9 +650,9 @@ const loadAuditData = async (sessionId) => {
         const ScoreCard = ({ score, maxScore }) => {
             const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
             let colorClass = 'text-gray-600';
-            if (percentage >= 80) {
+            if (percentage >= 90) { // Higher threshold for 'Excellent' (4 points) system
                 colorClass = 'text-green-600';
-            } else if (percentage >= 50) {
+            } else if (percentage >= 70) {
                 colorClass = 'text-yellow-600';
             } else if (percentage > 0) {
                 colorClass = 'text-red-600';
@@ -626,11 +675,16 @@ const loadAuditData = async (sessionId) => {
         const ResponseButton = ({ value, currentValue, onClick, children, iconType, disabled = false }) => {
             const isActive = value === currentValue;
             const baseClasses = "flex-1 px-3 py-2.5 text-sm font-semibold rounded-lg flex items-center justify-center gap-2 transition-all duration-200 border-2 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-70";
+            
+            // --- UPDATED CLASSES FOR 4 OPTIONS ---
             const activeClasses = {
-                'yes': 'bg-green-500 border-green-500 text-white shadow-lg transform scale-105 focus-visible:ring-green-500',
-                'partial': 'bg-yellow-500 border-yellow-500 text-white shadow-lg transform scale-105 focus-visible:ring-yellow-500',
-                'no': 'bg-red-500 border-red-500 text-white shadow-lg transform scale-105 focus-visible:ring-red-500'
+                'excellent': 'bg-green-500 border-green-500 text-white shadow-lg transform scale-105 focus-visible:ring-green-500',
+                'good': 'bg-lime-500 border-lime-500 text-white shadow-lg transform scale-105 focus-visible:ring-lime-500', // Changed from yellow to lime for better contrast
+                'fair': 'bg-orange-500 border-orange-500 text-white shadow-lg transform scale-105 focus-visible:ring-orange-500',
+                'poor': 'bg-red-500 border-red-500 text-white shadow-lg transform scale-105 focus-visible:ring-red-500'
             };
+            // --- END UPDATED CLASSES ---
+            
             const inactiveClasses = "bg-white border-gray-300 hover:border-gray-400 text-gray-700 hover:bg-gray-50 focus-visible:ring-indigo-500 disabled:bg-gray-100 disabled:hover:border-gray-300";
             
             return (
@@ -643,11 +697,14 @@ const loadAuditData = async (sessionId) => {
         const ChecklistItem = ({ question, answer, onResponseChange, onCommentChange, isSubmitted }) => (
             <div className="border-b border-gray-100 pb-6 last:border-b-0 print:border-b-2 print:border-gray-300">
                 <p className="text-base font-medium text-gray-700 mb-4">{question.text}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                    <ResponseButton value="yes" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'yes')} iconType="check-circle" disabled={isSubmitted}>Yes</ResponseButton>
-                    <ResponseButton value="partial" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'partial')} iconType="exclamation-triangle" disabled={isSubmitted}>Partial</ResponseButton>
-                    <ResponseButton value="no" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'no')} iconType="x-circle" disabled={isSubmitted}>No</ResponseButton>
+                {/* --- UPDATED BUTTON GRID FOR 4 OPTIONS --- */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <ResponseButton value="excellent" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'excellent')} iconType="check-circle" disabled={isSubmitted}>Excellent</ResponseButton>
+                    <ResponseButton value="good" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'good')} iconType="star" disabled={isSubmitted}>Good</ResponseButton>
+                    <ResponseButton value="fair" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'fair')} iconType="exclamation-triangle" disabled={isSubmitted}>Fair</ResponseButton>
+                    <ResponseButton value="poor" currentValue={answer.response} onClick={() => onResponseChange(question.id, 'poor')} iconType="x-circle" disabled={isSubmitted}>Poor</ResponseButton>
                 </div>
+                {/* --- END UPDATED BUTTON GRID --- */}
                 <div className="relative">
                     <textarea value={answer.comment} onChange={(e) => onCommentChange(question.id, e.target.value)} placeholder="Add a comment (optional)..." className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition duration-200 text-sm placeholder-gray-500 disabled:bg-gray-100 disabled:cursor-not-allowed" rows={2} disabled={isSubmitted}/>
                 </div>
@@ -899,18 +956,18 @@ useEffect(() => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label htmlFor="storeName" className="block text-sm font-medium text-gray-700">Store Name</label>
-                                        <input type="text" id="storeName" value={storeName} onChange={e => handleFieldChange('storeName', e.target.value)} disabled={isSubmitted} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
+                                        <input type="text" id="storeName" value={auditState.storeName} onChange={e => handleFieldChange('storeName', e.target.value)} disabled={isSubmitted} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                                     </div>
                                     <div>
                                         <label htmlFor="auditDate" className="block text-sm font-medium text-gray-700">Date of Audit</label>
-                                        <input type="date" id="auditDate" value={auditDate} onChange={e => handleFieldChange('auditDate', e.target.value)} disabled={isSubmitted} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
+                                        <input type="date" id="auditDate" value={auditState.auditDate} onChange={e => handleFieldChange('auditDate', e.target.value)} disabled={isSubmitted} className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                                     </div>
                                 </div>
                             </div>
                             <div className="bg-white/80 backdrop-blur-lg p-6 rounded-xl shadow-lg mb-6 print:shadow-none">
                                 <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">📊 Audit Progress & Score</h2>
                                 <ProgressBar progress={progress} />
-                                <ScoreCard score={score} maxScore={maxScore} /> {/* <-- New ScoreCard integration */}
+                                <ScoreCard score={score} maxScore={maxScore} /> {/* <-- ScoreCard integrates new score/maxScore */}
                             </div>
                             <div className="space-y-4">
                                 {sections.map((section, index) => (
