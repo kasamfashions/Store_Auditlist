@@ -96,7 +96,7 @@
     <script>
         // --- START: Google Sheets Configuration ---
         // IMPORTANT: PASTE YOUR GOOGLE APPS SCRIPT WEB APP URL HERE
-        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwo5L6rgDfIez40HCY7l4-Rt4q75UDJjwYEhZbgYJUKxRXhwt8OR7ZMcLg1mpueDmlQ/exec'; 
+        const GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbz4JK4ucG_gTL5t5b7zr4R37gIFyZ2C3O52kNxuKcHhO3_qupt0C6vSl-xD4Hi12Ux7/exec'; 
         
     </script>
     <script type="module">
@@ -558,13 +558,15 @@ const loadAuditData = async (sessionId) => {
             <header className="bg-white/80 backdrop-blur-lg shadow-sm print:shadow-none sticky top-0 z-10">
                 <div className="max-w-4xl mx-auto py-3 px-4 md:px-8 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
-                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M11 2.22021C11.5523 2.22021 12 2.66793 12 3.22021V20.8115C12 21.3638 11.5523 21.8115 11 21.8115C10.4477 21.8115 10 21.3638 10 20.8115V3.22021C10 2.66793 10.4477 2.22021 11 2.22021Z" fill="white"/>
-                                <path d="M4 8.22021C4.55228 8.22021 5 8.66793 5 9.22021V20.7798C5 21.3321 4.55228 21.7798 4 21.7798C3.44772 21.7798 3 21.3321 3 20.7798V9.22021C3 8.66793 3.44772 8.22021 4 8.22021Z" fill="white"/>
-                                <path d="M18 5.22021C18.5523 5.22021 19 5.66793 19 6.22021V20.7798C19 21.3321 18.5523 21.7798 18 21.7798C17.4477 21.7798 17 21.3321 17 20.7798V6.22021C17 5.66793 17.4477 5.22021 18 5.22021Z" fill="white"/>
-                            </svg>
+                        {/* START OF LOGO INTEGRATION (MODIFIED) */}
+                        <div className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg overflow-hidden bg-gray-100">
+                             <img 
+                                src="https://www.dropbox.com/scl/fi/27nzz7l1g1nhxaupvux5k/logo-kasam.png?rlkey=zuwcfise279i2itfbb70iz2p5&st=6bzd9iko&dl=0" 
+                                alt="Kasam Fashions Logo" 
+                                className="w-full h-full object-contain p-1"
+                             />
                         </div>
+                        {/* END OF LOGO INTEGRATION (MODIFIED) */}
                         <h1 className="text-2xl md:text-3xl font-bold text-gray-800">
                             Kasam Fashions
                             <span className="block text-sm font-medium text-gray-500 -mt-1">Store Audit</span>
@@ -1036,4 +1038,3 @@ useEffect(() => {
     </script>
 </body>
 </html>
-
