@@ -101,7 +101,7 @@
         // --- START: Authentication Configuration ---
         // DEFAULT PASSWORD: 'kasam' (Users can change this later via the settings modal)
         const DEFAULT_APP_PASSWORD = '123456'; 
-        const PASSWORD_STORAGE_KEY = 'audit-app-password-hash';
+        const PASSWORD_STORAGE_KEY = 'audit-app-password-hash'; // KEPT FOR simpleHash UTIL
         // --- END: Authentication Configuration ---
     </script>
     <script type="module">
@@ -258,10 +258,9 @@ window.subscribeToQuestions = subscribeToQuestions;
 
 
         //============================================
-        // SERVICES: pdfService.ts
+        // SERVICES: screenshotService.ts (Modified from pdfService.ts)
         //============================================
-        const exportToPdf = async (elementId, fileName) => {
-            const { jsPDF } = jspdf;
+        const captureScreenshot = async (elementId, fileName) => {
             const reportElement = document.getElementById(elementId);
             if (!reportElement) {
                 console.error(`Element with id "${elementId}" not found.`);
@@ -270,21 +269,25 @@ window.subscribeToQuestions = subscribeToQuestions;
 
             document.body.classList.add('print-prep');
             try {
+                // html2canvas automatically captures the full scrollable content of the element
                 const canvas = await html2canvas(reportElement, { 
-                    scale: 2, 
+                    scale: 2, // High resolution for a clear image
                     useCORS: true, 
                     logging: false 
                 });
+                
                 const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF({ 
-                    orientation: 'portrait', 
-                    unit: 'px', 
-                    format: [canvas.width, canvas.height] 
-                });
-                pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-                pdf.save(fileName);
+                
+                // Create a temporary link element to trigger the download
+                const link = document.createElement('a');
+                link.href = imgData;
+                link.download = fileName.replace(/\.pdf$/, '.png'); // Ensure filename has .png extension
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
             } catch (error) {
-                console.error("Error generating PDF:", error);
+                console.error("Error capturing screenshot:", error);
             } finally {
                 document.body.classList.remove('print-prep');
             }
@@ -613,7 +616,7 @@ const loadAuditData = async (sessionId) => {
             return icons[type] || null;
         };
 
-        const Header = ({ onEditClick, onPasswordChangeClick, isSubmitted }) => (
+        const Header = ({ onEditClick, isSubmitted }) => (
             <header className="bg-white/80 backdrop-blur-lg shadow-sm print:shadow-none sticky top-0 z-10">
                 <div className="max-w-4xl mx-auto py-3 px-4 md:px-8 flex justify-between items-center">
                     <div className="flex items-center gap-3">
@@ -632,10 +635,7 @@ const loadAuditData = async (sessionId) => {
                         </h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={onPasswordChangeClick} className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-800 transition-colors duration-200 p-2 rounded-lg hover:bg-gray-100 print:hidden" aria-label="Change Password">
-                            <Icon type="lock" className="w-5 h-5"/>
-                            <span className="hidden md:inline">Change Password</span>
-                        </button>
+                        {/* Removed 'Change Password' button */}
                         {!isSubmitted && (
                             <button onClick={onEditClick} className="flex items-center gap-2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200 p-2 rounded-lg hover:bg-indigo-50 print:hidden" aria-label="Edit Questions">
                                 <Icon type="edit" className="w-5 h-5"/>
@@ -761,7 +761,7 @@ const loadAuditData = async (sessionId) => {
                                     <Icon type="plus" /><span className="font-bold">Start New Audit</span>
                                 </button>
                                 <button onClick={onExport} className="bg-green-600 text-white w-auto px-4 py-2.5 rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center justify-center gap-2 transition-transform duration-200 hover:scale-105">
-                                    <Icon type="download" /><span className="hidden md:inline">Export PDF</span>
+                                    <Icon type="download" /><span className="hidden md:inline">Capture Screenshot</span>
                                 </button>
                             </div>
                         </div>
@@ -780,7 +780,7 @@ const loadAuditData = async (sessionId) => {
                                     title={!isComplete ? `Complete the checklist to submit (${Math.round(progress)}%)` : "Submit Final Audit"}>
                                     <Icon type="check-circle" /><span className="font-bold">Submit</span>
                                 </button>
-                                <button onClick={onExport} className="bg-green-600 text-white w-12 h-12 rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center justify-center transition-transform duration-200 hover:scale-105"><Icon type="download" /></button>
+                                <button onClick={onExport} className="bg-green-600 text-white w-12 h-12 rounded-full shadow-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center justify-center transition-transform duration-200 hover:scale-105" title="Capture Screenshot"><Icon type="download" /></button>
                                 <button onClick={onReset} className="bg-red-600 text-white w-12 h-12 rounded-full shadow-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 flex items-center justify-center transition-transform duration-200 hover:scale-105"><Icon type="reset" /></button>
                             </div>
                         </>
@@ -905,75 +905,7 @@ const loadAuditData = async (sessionId) => {
             );
         };
         
-        // --- NEW PASSWORD CHANGE MODAL COMPONENT ---
-        const PasswordChangeModal = ({ onSave, onCancel }) => {
-            const [oldPassword, setOldPassword] = useState('');
-            const [newPassword, setNewPassword] = useState('');
-            const [confirmPassword, setConfirmPassword] = useState('');
-            const [error, setError] = useState(null);
-            const [success, setSuccess] = useState(null);
-
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                setError(null);
-                setSuccess(null);
-                
-                if (newPassword.length < 4) {
-                    setError("New password must be at least 4 characters.");
-                    return;
-                }
-                
-                if (newPassword !== confirmPassword) {
-                    setError("New password and confirmation do not match.");
-                    return;
-                }
-                
-                onSave(oldPassword, newPassword, setError, setSuccess);
-            };
-
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 modal-backdrop print:hidden">
-                    <div className="bg-white rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col modal-content">
-                        <div className="p-4 border-b flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-gray-800">Change Application Password</h2>
-                            <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><Icon type="x-circle" className="w-6 h-6"/></button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <p className="text-sm text-gray-500">The current default password is: `123456` (if not previously changed).</p>
-                            
-                            {success && (
-                                <div className="p-3 bg-green-100 text-green-700 text-sm rounded-lg flex items-center gap-2">
-                                    <Icon type="check-circle" className="w-5 h-5"/> {success}
-                                </div>
-                            )}
-                            {error && (
-                                <div className="p-3 bg-red-100 text-red-700 text-sm rounded-lg flex items-center gap-2">
-                                    <Icon type="exclamation-triangle" className="w-5 h-5"/> {error}
-                                </div>
-                            )}
-                            
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Current Password</label>
-                                <input type="password" value={oldPassword} onChange={(e) => {setOldPassword(e.target.value); setError(null); setSuccess(null);}} className="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"/>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">New Password (min 4 chars)</label>
-                                <input type="password" value={newPassword} onChange={(e) => {setNewPassword(e.target.value); setError(null); setSuccess(null);}} className="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"/>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Confirm New Password</label>
-                                <input type="password" value={confirmPassword} onChange={(e) => {setConfirmPassword(e.target.value); setError(null); setSuccess(null);}} className="mt-1 block w-full p-3 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"/>
-                            </div>
-
-                            <div className="pt-2 flex justify-end gap-3">
-                                <button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 font-semibold">Cancel</button>
-                                <button type="submit" className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold">Update Password</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            );
-        }
+        // --- Removed PasswordChangeModal Component ---
 
         //============================================
         // APP: Main Application Component
@@ -981,12 +913,7 @@ const loadAuditData = async (sessionId) => {
         const App = () => {
             // --- AUTHENTICATION STATE ---
             const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [currentPasswordHash, setCurrentPasswordHash] = useState(() => {
-                const storedHash = localStorage.getItem(PASSWORD_STORAGE_KEY);
-                // If no hash is stored, use the hash of the default password
-                return storedHash || simpleHash(DEFAULT_APP_PASSWORD); 
-            });
-            const [isChangingPassword, setIsChangingPassword] = useState(false);
+            const [currentPasswordHash] = useState(() => simpleHash(DEFAULT_APP_PASSWORD)); 
             // ----------------------------
 
             const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -1003,21 +930,7 @@ const loadAuditData = async (sessionId) => {
                 }
             }, [currentPasswordHash]);
             
-            const handlePasswordChange = useCallback((oldPass, newPass, setError, setSuccess) => {
-                const oldPassHash = simpleHash(oldPass);
-                
-                if (oldPassHash !== currentPasswordHash) {
-                    setError("Current password is incorrect.");
-                    return;
-                }
-                
-                const newPassHash = simpleHash(newPass);
-                setCurrentPasswordHash(newPassHash);
-                localStorage.setItem(PASSWORD_STORAGE_KEY, newPassHash);
-                setSuccess("Password updated successfully!");
-                // Optionally close the modal after a delay
-                setTimeout(() => setIsChangingPassword(false), 1500);
-            }, [currentPasswordHash]);
+            // --- Removed handlePasswordChange ---
             // -------------------------------
 
 useEffect(() => {
@@ -1080,8 +993,9 @@ useEffect(() => {
             const { storeName, auditDate, isSubmitted, answers } = auditState;
 
             const handleExport = () => {
-                const fileName = `Audit-Report-${storeName.replace(/\s+/g, '-') || 'Store'}-${auditDate}.pdf`;
-                exportToPdf('audit-report', fileName);
+                // Changed from .pdf to .png and calling the new screenshot function
+                const fileName = `Audit-Report-${storeName.replace(/\s+/g, '-') || 'Store'}-${auditDate}.png`;
+                captureScreenshot('audit-report', fileName);
             };
 
             const handleReset = () => {
@@ -1127,7 +1041,7 @@ useEffect(() => {
                 <div className="min-h-screen font-sans text-gray-800">
                     <Header 
                         onEditClick={() => setIsEditorOpen(true)} 
-                        onPasswordChangeClick={() => setIsChangingPassword(true)} // <-- NEW HANDLER
+                        // Removed onPasswordChangeClick prop
                         isSubmitted={isSubmitted} 
                     />
                     <main className="max-w-4xl mx-auto p-4 md:p-8 pb-32">
@@ -1255,7 +1169,7 @@ useEffect(() => {
                         isSubmitted={isSubmitted}
                     />
                     {isEditorOpen && !isSubmitted && <QuestionEditor sections={sections} onSave={handleSaveQuestions} onCancel={() => setIsEditorOpen(false)} />}
-                    {isChangingPassword && <PasswordChangeModal onSave={handlePasswordChange} onCancel={() => setIsChangingPassword(false)} />}
+                    {/* Removed PasswordChangeModal component render */}
                 </div>
             );
         };
@@ -1277,4 +1191,3 @@ useEffect(() => {
     </script>
 </body>
 </html>
-
